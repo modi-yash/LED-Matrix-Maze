@@ -102,7 +102,8 @@ class Game:
                     final_cell = stack.pop()
                 else:
                     stack.pop()
-
+        maze[start_cell[0]][start_cell[1]]=2
+        maze[final_cell[0]][final_cell[1]]=3
         return maze, start_cell, final_cell
 
     def flicker(self):
