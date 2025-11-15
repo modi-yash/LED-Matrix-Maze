@@ -11,7 +11,7 @@ import random
 class Game:
     def __init__(self, player_interval=0.3, end_interval=0.6):
         # Maze + buttons
-        self.maze = self.generate_maze(8)
+        self.maze, self.player, self.end = self.generate_maze(8, 8)
         self.button_pins = [28, 27, 26, 22, 19, 20]
         self.buttons = [Pin(pin, Pin.IN, Pin.PULL_UP) for pin in self.button_pins]
         self.buttons_values = [1 for pin in self.button_pins]
@@ -24,10 +24,6 @@ class Game:
         self.display.brightness(self.brightness_value)
         self.display.fill(0)
         self.display.show()
-
-        # Player + end initialization
-        self.player = [-1, -1]
-        self.end = [-1, -1]
 
         # Flicker timing (customizable)
         self.player_interval = player_interval  # seconds
@@ -64,71 +60,50 @@ class Game:
                 self.buttons_values[index] = 0
         return -1
 
-    def generate_maze(self, size=8):
-        maze = [[1 for _ in range(size)] for _ in range(size)]
-        directions = [(-2, 0), (2, 0), (0, -2), (0, 2)]
-        start_x, start_y = random.randrange(0, size, 2), random.randrange(0, size, 2)
-        maze[start_y][start_x] = 0
-        stack = [(start_x, start_y)]
+    def generate_maze(width, height):
+        """Generate a simple maze using iterative depth-first backtracker.
 
+        Returns a 2D list where 1 indicates a visited/corridor cell and 0 is a wall.
+        """
+        maze = [[0] * width for _ in range(height)]
+        start_cell = [random.randint(0, width - 1), random.randint(0, height - 1)]
+        stack = [start_cell]
+        maze[0][0] = 1
+        final_cell = [0,0]
+        stackmax = 0
         while stack:
             x, y = stack[-1]
-            for i in range(len(directions) - 1, 0, -1):
-                j = random.randint(0, i)
-                directions[i], directions[j] = directions[j], directions[i]
 
-            carved = False
+            # collect unvisited neighbors
+            neighbors = []
+            directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
             for dx, dy in directions:
                 nx, ny = x + dx, y + dy
-                if 0 <= nx < size and 0 <= ny < size and maze[ny][nx] == 1:
-                    maze[y + dy // 2][x + dx // 2] = 0
-                    maze[ny][nx] = 0
-                    stack.append((nx, ny))
-                    carved = True
-                    break
-            if not carved:
-                stack.pop()
-
-        def edge_open_cells():
-            cells = []
-            for i in range(size):
-                if maze[0][i] == 0: cells.append((i, 0))
-                if maze[size-1][i] == 0: cells.append((i, size-1))
-                if maze[i][0] == 0: cells.append((0, i))
-                if maze[i][size-1] == 0: cells.append((size-1, i))
-            return cells
-
-        edges = edge_open_cells()
-        while len(edges) < 2:
-            side = random.choice(["top", "bottom", "left", "right"])
-            if side == "top":
-                maze[0][random.randrange(1, size-1)] = 0
-            elif side == "bottom":
-                maze[size-1][random.randrange(1, size-1)] = 0
-            elif side == "left":
-                maze[random.randrange(1, size-1)][0] = 0
+                if not (0 <= nx < width and 0 <= ny < height):
+                    continue
+                if maze[ny][nx] != 0:
+                    continue
+                adjacent_visited = 0
+                for ddx, ddy in directions:
+                    ax, ay = nx + ddx, ny + ddy
+                    if 0 <= ax < width and 0 <= ay < height:
+                        if maze[ay][ax] == 1 or (ax, ay) == start_cell:
+                            adjacent_visited += 1
+                if adjacent_visited <= 1:
+                    neighbors.append((nx, ny))
+            if neighbors:
+                next_cell = random.choice(neighbors)
+                print(next_cell)
+                stack.append(next_cell)
+                maze[next_cell[1]][next_cell[0]] = 1
             else:
-                maze[random.randrange(1, size-1)][size-1] = 0
-            edges = edge_open_cells()
+                if len(stack) > stackmax:
+                    stackmax = len(stack)
+                    final_cell = stack.pop()
+                else:
+                    stack.pop()
 
-        start = random.choice(edges)
-        queue = [start]
-        visited = set([start])
-        while queue:
-            x, y = queue.pop(0)
-            for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < size and 0 <= ny < size and maze[ny][nx] == 0 and (nx, ny) not in visited:
-                    visited.add((nx, ny))
-                    queue.append((nx, ny))
-
-        reachable_edges = [c for c in edges if c in visited and c != start]
-        if not reachable_edges:
-            reachable_edges = list(visited)
-        end = max(reachable_edges, key=lambda c: abs(c[0]-start[0]) + abs(c[1]-start[1]))
-        maze[start[1]][start[0]] = 2
-        maze[end[1]][end[0]] = 3
-        return maze
+        return maze, start_cell, final_cell
 
     def flicker(self):
         now = time.ticks_ms()
